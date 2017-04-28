@@ -4,6 +4,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/torch_circle"
@@ -12,7 +13,8 @@
     <android.support.design.widget.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:theme="@style/AppTheme.AppBarOverlay">
+        android:theme="@style/AppTheme.AppBarOverlay"
+        android:id="@+id/appBarLayout">
 
         <android.support.v7.widget.Toolbar
             android:id="@+id/toolbar"
@@ -24,6 +26,16 @@
     </android.support.design.widget.AppBarLayout>
 
     <include layout="@layout/content_main" />
+
+<ImageButton
+    android:id="@+id/camera_button"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/camera"
+    android:visibility="invisible"
+    android:layout_below="@+id/appBarLayout"
+    android:layout_alignStart="@+id/torch_button"
+    android:layout_marginTop="40dp" />
 
     <ImageButton
         android:id="@+id/torch_button"
@@ -43,6 +55,15 @@
         android:layout_alignParentRight="true"
         android:layout_alignParentBottom="true"
         app:fabSize="normal"/>
-
+<SeekBar
+    android:id="@+id/seek_bar"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:visibility="invisible"
+    android:max="10"
+    android:progress="0"
+    android:layout_above="@+id/fab"
+    android:layout_alignParentStart="true"
+    />
 
 </RelativeLayout>
