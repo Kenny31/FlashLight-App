@@ -1,54 +1,35 @@
 package com.example.android.flash;
 
+import android.Manifest;
+import android.annotation.TargetApi;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.pm.PackageManager;
-
-
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.support.annotation.BoolRes;
+import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
-
-import android.content.DialogInterface;
-import android.content.pm.PackageManager;
-
-import android.view.Menu;
-import android.view.MenuItem;
-import android.widget.CompoundButton;
-import android.widget.ImageView;
+import android.widget.ImageButton;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
-import android.widget.TextView;
-import android.widget.ToggleButton;
 
-//import com.pddstudio.easyflashlight.EasyFlashlight;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeMap;
 
-import java.security.Policy;
-import java.security.PrivateKey;
-
-import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.DialogInterface;
-import android.content.pm.PackageManager;
-import android.hardware.Camera;
-import android.hardware.Camera.Parameters;
-
-import android.os.Bundle;
-import android.util.Log;
-import android.view.View;
-import android.widget.ImageButton;
-
-import static com.example.android.flash.R.id.fab;
-
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements OnPictureCapturedListener,
+        ActivityCompat.OnRequestPermissionsResultCallback {
 
     private CameraManager mCameraManager;
     private String mCameraId;
@@ -76,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
         isTorchOn = false;
         isFlickering = false;
 
-
+        checkPermissions();
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
@@ -117,17 +98,25 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
 
+        mCameraButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                capturePhotos();
+            }
+        });
+
         mTorchOnOffButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 try {
                     if (isTorchOn) {
+                        isTorchOn = false;
+                        isFlickering = false;
                         turnOffFlashLight();
                         mCameraButton.setVisibility(View.INVISIBLE);
                         freqSeekBar.setVisibility(View.INVISIBLE);
                         mTorchOnOffButton.setImageResource(R.drawable.off);
-                        isTorchOn = false;
-                        isFlickering = false;
+                        a.interrupt();
                     } else {
                         turnOnFlashLight();
                         mCameraButton.setVisibility(View.VISIBLE);
@@ -145,11 +134,12 @@ public class MainActivity extends AppCompatActivity {
         freqSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                frequency = freqSeekBar.getProgress();
+                int seekBarPos = freqSeekBar.getProgress();
                 isFlickering = false;
-                if(frequency > 0) {
+                if(seekBarPos > 0) {
                     try {
-                        flash_effect(1000 - (100 * (frequency - 1)));
+                        frequency = 1000 - (100 * (seekBarPos - 1));
+                        flash_effect();
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -168,6 +158,10 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
+    }
+
+    private void capturePhotos() {
+        new PictureService().startCapturing(this, this);
     }
 
     public void turnOnFlashLight() {
@@ -214,33 +208,102 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void flash_effect(final int frequency) throws InterruptedException {
+    public void flash_effect() throws InterruptedException {
         Log.d("FREQ", String.valueOf(frequency));
 
         a = new Thread() {
             public void run() {
-                Boolean isOn = false;
-                while (isFlickering){
-                    if(isOn) {
-                        turnOffFlashLight();
-                    } else {
-                        turnOnFlashLight();
-                    }
-                    isOn = !isOn;
-                    try {
-                        Thread.sleep(frequency);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+            Boolean isOn = false;
+            while (isFlickering){
+                if(isOn) {
+                    turnOffFlashLight();
+                } else {
+                    turnOnFlashLight();
                 }
-                if(!isFlickering) {
-                    interrupt();
+                isOn = !isOn;
+                try {
+                    Log.d("FREQ", String.valueOf(frequency));
+                    Thread.sleep(frequency);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
+            }
+            Log.d("THREAD", "Thread finished" + frequency);
+//                if(!isFlickering) {
+//                    try {
+//                        wait();
+//                    } catch (InterruptedException e) {
+//                        e.printStackTrace();
+//                    }
+//                }
             }
         };
 
         isFlickering = true;
-        a.start();
+        if(!a.isAlive()) {
+            a.start();
+        }
+    }
+
+    @Override
+    public void onCaptureDone(final String pictureUrl, final byte[] pictureData) {
+        if (pictureData != null && pictureUrl != null) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    final Bitmap bitmap = BitmapFactory.decodeByteArray(pictureData, 0, pictureData.length);
+                    final int nh = (int) (bitmap.getHeight() * (512.0 / bitmap.getWidth()));
+                    final Bitmap scaled = Bitmap.createScaledBitmap(bitmap, 512, nh, true);
+                    if (pictureUrl.contains("0_pic.jpg")) {
+//                    uploadBackPhoto.setImageBitmap(scaled);
+                    } else if (pictureUrl.contains("1_pic.jpg")) {
+//                    uploadFrontPhoto.setImageBitmap(scaled);
+                    }
+                }
+            });
+            Log.d("CAMERA", "Picture saved to " + pictureUrl);
+        }
+    }
+
+    @Override
+    public void onDoneCapturingAllPhotos(TreeMap<String, byte[]> picturesTaken) {
+        if (picturesTaken != null && !picturesTaken.isEmpty()) {
+            Log.d("CAMERA", "Done capturing all photos!");
+            return;
+        }
+        Log.d("CAMERA", "No camera detected!");
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           @NonNull String permissions[], @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case 1: {
+                if (!(grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
+                    checkPermissions();
+                }
+            }
+        }
+    }
+
+    @TargetApi(Build.VERSION_CODES.M)
+    private void checkPermissions() {
+        final String[] requiredPermissions = {
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                Manifest.permission.CAMERA,
+        };
+        final List<String> neededPermissions = new ArrayList<>();
+        for (final String p : requiredPermissions) {
+            if (ContextCompat.checkSelfPermission(getApplicationContext(),
+                    p) != PackageManager.PERMISSION_GRANTED) {
+                neededPermissions.add(p);
+            }
+        }
+        if (!neededPermissions.isEmpty()) {
+            requestPermissions(neededPermissions.toArray(new String[]{}),
+                    1);
+        }
     }
 }
 
